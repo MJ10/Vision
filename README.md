@@ -18,6 +18,7 @@ This project is quite similar to and is inspired by the TF Classify app in the T
 ## Libraries
 - [TensorFlow](https://tensorflow.org)
 - [Anko](https://github.com/Kotlin/anko)
+- [CameraKit](https://github.com/gogopop/CameraKit-Android)
 
 ## License
 This project is licensed under the [MIT License](https://github.com/MJ10/Vision/blob/master/LICENSE.md)
