@@ -5,6 +5,7 @@ import android.animation.Animator
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
@@ -77,7 +78,7 @@ class MainActivity : AppCompatActivity() {
 
         val anim: Animator = ViewAnimationUtils.createCircularReveal(resultView, cx, cy, 0f, finalRadius.toFloat())
         resultView.visibility = View.VISIBLE
-        resultView.setBackgroundColor(0xff0000)
+        resultView.setBackgroundColor(Color.parseColor("#FFFFFF"))
         anim.duration = 350
         anim.start()
     }
