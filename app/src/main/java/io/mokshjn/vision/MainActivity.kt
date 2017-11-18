@@ -12,13 +12,11 @@ import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
 import android.view.View
 import android.view.ViewAnimationUtils
-import android.widget.Button
-import android.widget.ImageView
 import com.flurgle.camerakit.CameraListener
 import com.flurgle.camerakit.CameraView
 import android.widget.TextView
 import io.mokshjn.vision.api.Classifier
-import io.mokshjn.vision.api.TensorFlowImageClassifier
+import io.mokshjn.vision.api.ImageClassifier
 import java.util.concurrent.Executors
 
 
@@ -36,7 +34,7 @@ class MainActivity : AppCompatActivity() {
     private val LABEL_FILE = "file:///android_asset/imagenet_comp_graph_label_strings.txt"
 
     var camera: CameraView? = null
-    private var classifier: Classifier? = null
+    private lateinit var classifier: Classifier
     private val executor = Executors.newSingleThreadExecutor()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,7 +57,7 @@ class MainActivity : AppCompatActivity() {
                 var result: Bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg?.size!!)
                 result = Bitmap.createScaledBitmap(result, INPUT_SIZE, INPUT_SIZE, false)
 
-                val results = classifier?.recognizeImage(result)
+                val results = classifier.recognizeImage(result)
 
                 (findViewById(R.id.result) as TextView).text = results.toString()
 
@@ -94,7 +92,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun initTensorFlow() {
         executor.execute({
-            classifier = TensorFlowImageClassifier.create(
+            classifier = ImageClassifier.create(
                     assets,
                     MODEL_FILE,
                     LABEL_FILE,
