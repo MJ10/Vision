@@ -8,8 +8,10 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.support.design.widget.FloatingActionButton
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
+import android.support.v7.widget.CardView
 import android.view.View
 import android.view.ViewAnimationUtils
 import com.flurgle.camerakit.CameraListener
@@ -17,6 +19,8 @@ import com.flurgle.camerakit.CameraView
 import android.widget.TextView
 import io.mokshjn.vision.api.Classifier
 import io.mokshjn.vision.api.ImageClassifier
+import org.jetbrains.anko.custom.async
+import org.jetbrains.anko.doAsync
 import java.util.concurrent.Executors
 
 
@@ -40,14 +44,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        camera = findViewById(R.id.camera_view) as CameraView
+        camera = findViewById(R.id.camera_view)
 
         if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), RC_CAMERA)
-        }
-
-        findViewById(R.id.floatingActionButton).setOnClickListener { _: View? ->
-            camera?.captureImage()
         }
 
         camera?.setCameraListener(object : CameraListener() {
@@ -57,19 +57,29 @@ class MainActivity : AppCompatActivity() {
                 var result: Bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg?.size!!)
                 result = Bitmap.createScaledBitmap(result, INPUT_SIZE, INPUT_SIZE, false)
 
-                val results = classifier.recognizeImage(result)
-
-                (findViewById(R.id.result) as TextView).text = results.toString()
-
-                animateView()
+                doAsync {
+                    val results = classifier.recognizeImage(result)
+                    runOnUiThread {
+                        (findViewById<TextView>(R.id.result)).text = results.toString()
+                        animateView()
+                    }
+                }
             }
         })
 
-        initTensorFlow()
+        doAsync {
+            initTensorFlow()
+
+            runOnUiThread {
+                findViewById<FloatingActionButton>(R.id.floatingActionButton).setOnClickListener {
+                    camera?.captureImage()
+                }
+            }
+        }
     }
 
     private fun animateView() {
-        val resultView = findViewById(R.id.resultCard)
+        val resultView = findViewById<CardView>(R.id.resultCard)
         val cx = (resultView.left + resultView.right) / 2
         val cy = (resultView.top + resultView.bottom) / 2
         val finalRadius = Math.max(resultView.width, resultView.height)
@@ -116,6 +126,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        executor.execute { classifier?.close() }
+        executor.execute { classifier.close() }
     }
 }
