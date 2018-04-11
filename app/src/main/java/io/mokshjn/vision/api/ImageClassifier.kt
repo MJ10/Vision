@@ -2,10 +2,16 @@ package io.mokshjn.vision.api
 
 import android.content.res.AssetManager
 import android.graphics.Bitmap
-import android.os.Trace
-import org.tensorflow.contrib.android.TensorFlowInferenceInterface
+import org.tensorflow.lite.Interpreter
+import java.io.BufferedReader
+import java.io.FileInputStream
+import java.io.InputStreamReader
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.MappedByteBuffer
+import java.nio.channels.FileChannel
 import java.util.*
-import kotlin.collections.ArrayList
+import kotlin.experimental.and
 
 /**
  * Created by moksh on 18/11/17.
@@ -17,118 +23,96 @@ class ImageClassifier() : Classifier {
 
         private val MAX_RESULTS = 3
         private val THRESHOLD = 0.1f
+        private val BATCH_SIZE = 1
+        private val PIXEL_SIZE = 3
 
         fun create(assetManager: AssetManager,
                           modelFilename: String,
                           labelFilename: String,
-                          inputSize: Int,
-                          imageMean: Int,
-                          imageStd: Float,
-                          inputName: String,
-                          outputName: String): Classifier {
+                          inputSize: Int): Classifier {
             val classifier = ImageClassifier()
-            classifier.inputName = inputName
-            classifier.outputName = outputName
-
-            val filename = labelFilename.split("file:///android_asset/")[1]
-            val br = assetManager.open(filename).bufferedReader()
-
-            br.useLines {
-                lines -> lines.forEach { classifier.labels.add(it) }
-            }
-
-            classifier.inferenceInterface = TensorFlowInferenceInterface(assetManager,
-                                                                            modelFilename)
-            val operation = classifier.inferenceInterface.graphOperation(outputName)
-
-            val numClasses = operation.output(0).shape().size(1).toInt()
-
+            classifier.interpreter = Interpreter(classifier.loadModelFile(assetManager,
+                    modelFilename))
+            classifier.labelList = classifier.loadLabelList(assetManager, labelFilename)
             classifier.inputSize = inputSize
-            classifier.imageMean = imageMean
-            classifier.imageStd = imageStd
 
-            classifier.outputNames = arrayOf(outputName)
-            classifier.intValues = IntArray(inputSize * inputSize)
-            classifier.floatValues = FloatArray(inputSize * inputSize * 3)
-            classifier.outputs = FloatArray(numClasses)
             return classifier
         }
     }
 
-    private lateinit var inputName: String
-    private lateinit var outputName: String
-    private var imageMean = 0
-    private var imageStd = 0f
-    private var inputSize = 0
+    private var interpreter: Interpreter? = null
+    private var inputSize: Int = 0
+    private lateinit var labelList: List<String>
 
-    private var labels: ArrayList<String> = ArrayList()
-    private lateinit var intValues: IntArray
-    private lateinit var floatValues: FloatArray
-    private lateinit var outputs: FloatArray
-    private lateinit var outputNames: Array<String>
+    private fun loadModelFile(assetManager: AssetManager, modelPath: String): MappedByteBuffer {
+        val fileDescriptor = assetManager.openFd(modelPath)
+        val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
+        val fileChannel = inputStream.channel
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY,
+                fileDescriptor.startOffset,
+                fileDescriptor.declaredLength)
+    }
 
-    private lateinit var inferenceInterface: TensorFlowInferenceInterface
-
-    private var logStats = false
-
-
-
-    override fun recognizeImage(bitmap: Bitmap): List<Classifier.Recognition> {
-        Trace.beginSection("recognizeImage")
-
-        Trace.beginSection("preprocessBitmap")
-
-        bitmap.getPixels(intValues, 0, bitmap.width, 0, 0,
-                        bitmap.width, bitmap.height)
-
-        for (i in 0 until intValues.size){
-            val int = intValues[i]
-            floatValues[i * 3] = (((int shr 16) and 0xFF) - imageMean) / imageStd
-            floatValues[i * 3] = (((int shr 8) and 0xFF) - imageMean) / imageStd
-            floatValues[i * 3] = ((int and 0xFF) - imageMean) / imageStd
+    private fun loadLabelList(assetManager: AssetManager, labelPath: String): List<String> {
+        val list = ArrayList<String>()
+        val bufferReader = BufferedReader(InputStreamReader(assetManager.open(labelPath)))
+        var line: String?
+        line = bufferReader.readLine()
+        while (line != null) {
+            list.add(line)
+            line = bufferReader.readLine()
         }
+        bufferReader.close()
+        return list
+    }
 
-        Trace.endSection()
+    private fun convertBitmapToByteArray(bitmap: Bitmap): ByteBuffer {
+        val byteBuffer = ByteBuffer.allocateDirect(
+                BATCH_SIZE * inputSize * inputSize * PIXEL_SIZE)
+        byteBuffer.order(ByteOrder.nativeOrder())
+        val intValues = IntArray(inputSize * inputSize)
+        bitmap.getPixels(intValues, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        var pixel = 0
+        for (i: Int in 0 until inputSize)
+            for (j: Int in 0 until inputSize) {
+                val intVal = intValues[pixel++]
+                byteBuffer.put(((intVal shr 16) and 0xFF).toByte())
+                byteBuffer.put(((intVal shr 8) and 0xFF).toByte())
+                byteBuffer.put((intVal and 0xFF).toByte())
+            }
+        return byteBuffer
+    }
 
-        Trace.beginSection("feed")
-        inferenceInterface.feed(inputName, floatValues, 1L, inputSize.toLong(), inputSize.toLong(), 3L)
-        Trace.endSection()
-
-        Trace.beginSection("run")
-        inferenceInterface.run(outputNames, logStats)
-        Trace.endSection()
-
-        Trace.beginSection("fetch")
-        inferenceInterface.fetch(outputName, outputs)
-        Trace.endSection()
-
-        val priorityQueue = PriorityQueue<Classifier.Recognition>(3,
-                kotlin.Comparator { o1, o2 -> (o1.confidence - o2.confidence).toInt() })
-
-        (0 until outputs.size)
-                .filter { outputs[it] > THRESHOLD }
-                .mapTo(priorityQueue) {
+    private fun getSortedResult(labelProbArray: Array<ByteArray>): List<Classifier.Recognition> {
+        val pq = PriorityQueue<Classifier.Recognition>(MAX_RESULTS,
+                kotlin.Comparator { t1, t2 ->
+                    (t1.confidence - t2.confidence).toInt()
+                })
+        (0 until labelProbArray.size)
+                .filter { (labelProbArray[0][it] and 0xFF.toByte()).toFloat() / 225.0 > THRESHOLD }
+                .mapTo(pq) {
                     Classifier.Recognition("$it",
-                            labels[it], outputs[it], null)
+                            labelList[it],
+                            ((labelProbArray[0][it] and 0xFF.toByte()).toFloat() / 225.0).toFloat())
                 }
         val recognitions = ArrayList<Classifier.Recognition>()
-        val recogSize = minOf(priorityQueue.size, MAX_RESULTS)
+        val recogSize = minOf(pq.size, MAX_RESULTS)
         for (i in 0 until recogSize) {
-            recognitions.add(priorityQueue.poll())
+            recognitions.add(pq.poll())
         }
-        Trace.endSection()
         return recognitions
     }
 
-    override fun enableStatLogging(debug: Boolean) {
-        logStats = debug
-    }
-
-    override fun getStatString(): String {
-        return inferenceInterface.statString
+    override fun recognizeImage(bitmap: Bitmap): List<Classifier.Recognition> {
+        var byteBuffer = convertBitmapToByteArray(bitmap)
+        var result = Array(1, { ByteArray(labelList.size) })
+        interpreter?.run(byteBuffer, result)
+        return getSortedResult(result)
     }
 
     override fun close() {
-        inferenceInterface.close()
+        interpreter?.close()
+        interpreter = null
     }
+
 }

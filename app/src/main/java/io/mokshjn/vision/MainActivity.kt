@@ -3,6 +3,7 @@ package io.mokshjn.vision
 import android.Manifest
 import android.animation.Animator
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
@@ -10,6 +11,7 @@ import android.support.design.widget.FloatingActionButton
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
 import android.support.v7.widget.CardView
+import android.util.Log
 import android.view.View
 import android.view.ViewAnimationUtils
 import android.widget.TextView
@@ -25,13 +27,8 @@ class MainActivity : AppCompatActivity() {
     val RC_CAMERA = 100
     private val INPUT_SIZE = 224
 
-    private val IMAGE_MEAN = 117
-    private val IMAGE_STD = 1f
-    private val INPUT_NAME = "input"
-    private val OUTPUT_NAME = "output"
-
-    private val MODEL_FILE = "file:///android_asset/tensorflow_inception_graph.pb"
-    private val LABEL_FILE = "file:///android_asset/imagenet_comp_graph_label_strings.txt"
+    private val MODEL_FILE = "mobilenet_quant_v1_224.tflite"
+    private val LABEL_FILE = "labels.txt"
 
     var camera: CameraView? = null
     private lateinit var classifier: Classifier
@@ -71,11 +68,13 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 findViewById<FloatingActionButton>(R.id.floatingActionButton).setOnClickListener {
                     camera?.captureImage {
-                        val result = it.bitmap
+                        val result = Bitmap.createScaledBitmap(
+                                it.bitmap, INPUT_SIZE, INPUT_SIZE, false)
                         doAsync {
                             val results = classifier.recognizeImage(result)
                             runOnUiThread {
                                 (findViewById<TextView>(R.id.result)).text = results.toString()
+                                Log.d("hEY", results.toString())
                                 animateView()
                             }
                         }
@@ -114,11 +113,7 @@ class MainActivity : AppCompatActivity() {
                     assets,
                     MODEL_FILE,
                     LABEL_FILE,
-                    INPUT_SIZE,
-                    IMAGE_MEAN,
-                    IMAGE_STD,
-                    INPUT_NAME,
-                    OUTPUT_NAME)
+                    INPUT_SIZE)
         })
     }
 
