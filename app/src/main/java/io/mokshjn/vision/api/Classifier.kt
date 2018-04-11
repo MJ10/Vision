@@ -8,11 +8,11 @@ import android.graphics.RectF
  */
 
 interface Classifier {
-    open class Recognition(val id:String, val title: String, val confidence: Float, var location: RectF?) {
+    open class Recognition(val id: String, val title: String, val confidence: Float) {
         override fun toString() : String {
             var resultString = ""
 
-            resultString += title + " "
+            resultString += "$title "
             resultString += String.format("(%.1f%%) ", confidence * 100.0f)
 
             return resultString.trim { it <= ' ' }

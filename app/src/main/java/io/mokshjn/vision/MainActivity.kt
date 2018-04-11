@@ -3,8 +3,6 @@ package io.mokshjn.vision
 import android.Manifest
 import android.animation.Animator
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
@@ -14,12 +12,10 @@ import android.support.v4.content.ContextCompat
 import android.support.v7.widget.CardView
 import android.view.View
 import android.view.ViewAnimationUtils
-import com.flurgle.camerakit.CameraListener
-import com.flurgle.camerakit.CameraView
 import android.widget.TextView
+import com.wonderkiln.camerakit.CameraView
 import io.mokshjn.vision.api.Classifier
 import io.mokshjn.vision.api.ImageClassifier
-import org.jetbrains.anko.custom.async
 import org.jetbrains.anko.doAsync
 import java.util.concurrent.Executors
 
@@ -50,29 +46,41 @@ class MainActivity : AppCompatActivity() {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), RC_CAMERA)
         }
 
-        camera?.setCameraListener(object : CameraListener() {
-            override fun onPictureTaken(jpeg: ByteArray?) {
-                super.onPictureTaken(jpeg)
+//        camera?.
 
-                var result: Bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg?.size!!)
-                result = Bitmap.createScaledBitmap(result, INPUT_SIZE, INPUT_SIZE, false)
-
-                doAsync {
-                    val results = classifier.recognizeImage(result)
-                    runOnUiThread {
-                        (findViewById<TextView>(R.id.result)).text = results.toString()
-                        animateView()
-                    }
-                }
-            }
-        })
+//        camera?.(object : CameraKitEventListener() {
+//            override fun onPictureTaken(jpeg: ByteArray?) {
+//                super.onPictureTaken(jpeg)
+//
+//                var result: Bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg?.size!!)
+//                result = Bitmap.createScaledBitmap(result, INPUT_SIZE, INPUT_SIZE, false)
+//
+//                doAsync {
+//                    val results = classifier.recognizeImage(result)
+//                    runOnUiThread {
+//                        (findViewById<TextView>(R.id.result)).text = results.toString()
+//                        animateView()
+//                    }
+//                }
+//            }
+//        })
 
         doAsync {
             initTensorFlow()
 
             runOnUiThread {
                 findViewById<FloatingActionButton>(R.id.floatingActionButton).setOnClickListener {
-                    camera?.captureImage()
+                    camera?.captureImage {
+                        val result = it.bitmap
+                        doAsync {
+                            val results = classifier.recognizeImage(result)
+                            runOnUiThread {
+                                (findViewById<TextView>(R.id.result)).text = results.toString()
+                                animateView()
+                            }
+                        }
+
+                    }
                 }
             }
         }
