@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     tools:context="io.mokshjn.vision.MainActivity">
 
-    <com.flurgle.camerakit.CameraView
+    <com.wonderkiln.camerakit.CameraView
         xmlns:camerakit="http://schemas.android.com/apk/res-auto"
         android:id="@+id/camera_view"
         android:layout_width="match_parent"
