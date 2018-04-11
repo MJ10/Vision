@@ -9,5 +9,3 @@
 .externalNativeBuild
 /app/build
 /app/libs
-/app/src/main/jniLibs
-/app/src/main/assets
